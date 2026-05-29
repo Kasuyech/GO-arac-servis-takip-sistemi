@@ -12,7 +12,6 @@ import (
 	_ "github.com/microsoft/go-mssqldb"
 )
 
-// Veri Modelleri
 type Arac struct {
 	ID    int
 	Plaka string
@@ -31,16 +30,15 @@ func main() {
 	}
 	defer db.Close()
 
-	// Tabloları kontrol et ve yoksa oluştur
 	tablolariHazirla(db)
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// --- MADDE 7: KİMLİK DOĞRULAMA (GİRİŞ EKRANI) ---
+	// --- KİMLİK DOĞRULAMA ---
 	fmt.Println("=====================================")
 	fmt.Println("    SERVİS SİSTEMİNE GİRİŞ YAPIN     ")
 	fmt.Println("=====================================")
-	
+
 	girisBasarili := false
 	for deneme := 1; deneme <= 3; deneme++ {
 		fmt.Print("Kullanıcı Adı: ")
@@ -61,12 +59,11 @@ func main() {
 	}
 
 	if !girisBasarili {
-		fmt.Println("⛔ 3 kez hatalı giriş yaptınız. Güvenlik nedeniyle sistem kapatılıyor.")
+		fmt.Println("⛔ 3 kez hatalı giriş yaptınız. Sistem kapatılıyor.")
 		os.Exit(1)
 	}
-	// ------------------------------------------------
 
-	// Ana Menü Döngüsü
+	// --- ANA MENÜ ---
 	for {
 		fmt.Println("\n=====================================")
 		fmt.Println("   🔧 ARAÇ SERVİS TAKİP SİSTEMİ 🔧   ")
@@ -102,19 +99,19 @@ func main() {
 	}
 }
 
-// Kimlik doğrulama işlemini veri tabanından sorgulayan fonksiyon
+// Kullanıcıyı veri tabanından doğrulayan fonksiyon
 func kimlikDogrula(db *sql.DB, kullaniciAdi, sifre string) bool {
 	var id int
 	sorgu := "SELECT id FROM Kullanicilar WHERE kullanici_adi = @p1 AND sifre = @p2"
 	err := db.QueryRow(sorgu, kullaniciAdi, sifre).Scan(&id)
-	
-	// Eğer eşleşen bir kayıt bulunursa (err == nil) giriş başarılıdır
+
+	// Veri tabanında eşleşen bir kayıt varsa nil döner ve giriş onaylanır
 	return err == nil
 }
 
 func tablolariHazirla(db *sql.DB) {
 	sorgu := `
-	-- Kimlik Doğrulama Tablosu (MADDE 7)
+	-- Kimlik Doğrulama Tablosu (SADECE TABLOYU OLUŞTURUYORUZ, VERİYİ KODDAN EKLEMİYORUZ)
 	IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Kullanicilar' AND xtype='U')
 	BEGIN
 		CREATE TABLE Kullanicilar (
@@ -122,8 +119,6 @@ func tablolariHazirla(db *sql.DB) {
 			kullanici_adi NVARCHAR(50) NOT NULL UNIQUE,
 			sifre NVARCHAR(50) NOT NULL
 		);
-		-- Sisteme ilk kurulumda varsayılan bir yönetici hesabı ekliyoruz
-		INSERT INTO Kullanicilar (kullanici_adi, sifre) VALUES ('admin', '1234');
 	END;
 
 	-- Diğer Tablolar
@@ -156,13 +151,13 @@ func aracEkle(db *sql.DB, reader *bufio.Reader) {
 	fmt.Println("\n--- Yeni Araç Girişi ---")
 	fmt.Print("Plaka: ")
 	plaka, _ := reader.ReadString('\n')
-	
+
 	fmt.Print("Marka: ")
 	marka, _ := reader.ReadString('\n')
-	
+
 	fmt.Print("Model: ")
 	model, _ := reader.ReadString('\n')
-	
+
 	fmt.Print("Sahibi: ")
 	sahip, _ := reader.ReadString('\n')
 
@@ -265,7 +260,7 @@ func servisGecmisiSorgula(db *sql.DB, reader *bufio.Reader) {
 		if len(tarih) > 19 {
 			tarih = tarih[:19]
 		}
-		
+
 		fmt.Printf("📅 Tarih: %s\n", tarih)
 		fmt.Printf("🛠 İşlem: %s\n", islem)
 		fmt.Printf("👨‍🔧 Teknisyen: %s\n", teknisyen)
