@@ -36,6 +36,37 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
+	// --- MADDE 7: KİMLİK DOĞRULAMA (GİRİŞ EKRANI) ---
+	fmt.Println("=====================================")
+	fmt.Println("    SERVİS SİSTEMİNE GİRİŞ YAPIN     ")
+	fmt.Println("=====================================")
+	
+	girisBasarili := false
+	for deneme := 1; deneme <= 3; deneme++ {
+		fmt.Print("Kullanıcı Adı: ")
+		kullaniciAdi, _ := reader.ReadString('\n')
+		kullaniciAdi = strings.TrimSpace(kullaniciAdi)
+
+		fmt.Print("Şifre: ")
+		sifre, _ := reader.ReadString('\n')
+		sifre = strings.TrimSpace(sifre)
+
+		if kimlikDogrula(db, kullaniciAdi, sifre) {
+			girisBasarili = true
+			fmt.Println("\n✅ Giriş Başarılı! Sisteme yönlendiriliyorsunuz...")
+			break
+		} else {
+			fmt.Printf("❌ Hatalı kullanıcı adı veya şifre! (Kalan Hakkınız: %d)\n\n", 3-deneme)
+		}
+	}
+
+	if !girisBasarili {
+		fmt.Println("⛔ 3 kez hatalı giriş yaptınız. Güvenlik nedeniyle sistem kapatılıyor.")
+		os.Exit(1)
+	}
+	// ------------------------------------------------
+
+	// Ana Menü Döngüsü
 	for {
 		fmt.Println("\n=====================================")
 		fmt.Println("   🔧 ARAÇ SERVİS TAKİP SİSTEMİ 🔧   ")
@@ -71,8 +102,31 @@ func main() {
 	}
 }
 
+// Kimlik doğrulama işlemini veri tabanından sorgulayan fonksiyon
+func kimlikDogrula(db *sql.DB, kullaniciAdi, sifre string) bool {
+	var id int
+	sorgu := "SELECT id FROM Kullanicilar WHERE kullanici_adi = @p1 AND sifre = @p2"
+	err := db.QueryRow(sorgu, kullaniciAdi, sifre).Scan(&id)
+	
+	// Eğer eşleşen bir kayıt bulunursa (err == nil) giriş başarılıdır
+	return err == nil
+}
+
 func tablolariHazirla(db *sql.DB) {
 	sorgu := `
+	-- Kimlik Doğrulama Tablosu (MADDE 7)
+	IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Kullanicilar' AND xtype='U')
+	BEGIN
+		CREATE TABLE Kullanicilar (
+			id INT PRIMARY KEY IDENTITY(1,1),
+			kullanici_adi NVARCHAR(50) NOT NULL UNIQUE,
+			sifre NVARCHAR(50) NOT NULL
+		);
+		-- Sisteme ilk kurulumda varsayılan bir yönetici hesabı ekliyoruz
+		INSERT INTO Kullanicilar (kullanici_adi, sifre) VALUES ('admin', '1234');
+	END;
+
+	-- Diğer Tablolar
 	IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Araclar' AND xtype='U')
 	CREATE TABLE Araclar (
 		id INT PRIMARY KEY IDENTITY(1,1),
@@ -102,13 +156,13 @@ func aracEkle(db *sql.DB, reader *bufio.Reader) {
 	fmt.Println("\n--- Yeni Araç Girişi ---")
 	fmt.Print("Plaka: ")
 	plaka, _ := reader.ReadString('\n')
-
+	
 	fmt.Print("Marka: ")
 	marka, _ := reader.ReadString('\n')
-
+	
 	fmt.Print("Model: ")
 	model, _ := reader.ReadString('\n')
-
+	
 	fmt.Print("Sahibi: ")
 	sahip, _ := reader.ReadString('\n')
 
@@ -144,7 +198,6 @@ func servisKaydiEkle(db *sql.DB, reader *bufio.Reader) {
 	plaka, _ := reader.ReadString('\n')
 	plaka = strings.TrimSpace(plaka)
 
-	// Önce plakadan aracın ID'sini bulalım
 	var aracID int
 	err := db.QueryRow("SELECT id FROM Araclar WHERE plaka = @p1", plaka).Scan(&aracID)
 	if err != nil {
@@ -186,7 +239,6 @@ func servisGecmisiSorgula(db *sql.DB, reader *bufio.Reader) {
 	plaka, _ := reader.ReadString('\n')
 	plaka = strings.TrimSpace(plaka)
 
-	// İki tabloyu (Araclar ve ServisKayitlari) birleştiren JOIN sorgusu
 	sorgu := `
 		SELECT s.tarih, s.islem, s.teknisyen, s.tutar 
 		FROM ServisKayitlari s
@@ -210,11 +262,10 @@ func servisGecmisiSorgula(db *sql.DB, reader *bufio.Reader) {
 		var tutar float64
 
 		rows.Scan(&tarih, &islem, &teknisyen, &tutar)
-		// Tarih formatını kısaltmak için ilk 19 karakteri (YYYY-MM-DD HH:MM:SS) alıyoruz
 		if len(tarih) > 19 {
 			tarih = tarih[:19]
 		}
-
+		
 		fmt.Printf("📅 Tarih: %s\n", tarih)
 		fmt.Printf("🛠 İşlem: %s\n", islem)
 		fmt.Printf("👨‍🔧 Teknisyen: %s\n", teknisyen)
@@ -228,7 +279,7 @@ func servisGecmisiSorgula(db *sql.DB, reader *bufio.Reader) {
 }
 
 func toplamGelirRaporu(db *sql.DB) {
-	var toplamGelir sql.NullFloat64 // Null gelme ihtimaline karşı güvenli tip
+	var toplamGelir sql.NullFloat64
 	var toplamIslem int
 
 	err := db.QueryRow("SELECT SUM(tutar), COUNT(id) FROM ServisKayitlari").Scan(&toplamGelir, &toplamIslem)
